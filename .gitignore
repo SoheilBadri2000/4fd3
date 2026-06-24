@@ -1,0 +1,17 @@
+# Node / Next.js
+node_modules/
+web/.next/
+web/out/
+web/build/
+web/.env*.local
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Misc
+.DS_Store
+*.log
