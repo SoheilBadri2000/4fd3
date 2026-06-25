@@ -1,11 +1,25 @@
-import { updateSession } from "@/utils/supabase/proxy";
+import { NextResponse } from "next/server";
 
-export async function proxy(request) {
-  return await updateSession(request);
+const protectedPaths = ["/dashboard", "/history"];
+const authPaths = ["/login", "/register"];
+
+export function proxy(request) {
+  const token = request.cookies.get("token")?.value;
+  const { pathname } = request.nextUrl;
+
+  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+  const isAuthPage = authPaths.some((p) => pathname.startsWith(p));
+
+  if (isProtected && !token) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+  if (isAuthPage && token) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/dashboard/:path*", "/history/:path*", "/login", "/register"],
 };

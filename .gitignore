@@ -5,6 +5,7 @@ web/out/
 web/build/
 web/.env*.local
 .env
+server/.env
 
 # Python
 __pycache__/

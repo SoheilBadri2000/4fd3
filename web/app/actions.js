@@ -1,45 +1,138 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@/utils/supabase/server";
+
+const API_URL = process.env.API_URL || "http://localhost:3001";
+
+async function getToken() {
+  const cookieStore = await cookies();
+  return cookieStore.get("token")?.value;
+}
+
+export async function login(email, password) {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (data.error) return { error: data.error };
+
+    const cookieStore = await cookies();
+    cookieStore.set("token", data.token, {
+      httpOnly: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    cookieStore.set("email", data.email, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    return { success: true };
+  } catch {
+    return { error: "Could not reach the server" };
+  }
+}
+
+export async function register(email, password) {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (data.error) return { error: data.error };
+
+    const cookieStore = await cookies();
+    cookieStore.set("token", data.token, {
+      httpOnly: true,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    cookieStore.set("email", data.email, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
+    return { success: true };
+  } catch {
+    return { error: "Could not reach the server" };
+  }
+}
 
 export async function logout() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  const cookieStore = await cookies();
+  cookieStore.delete("token");
+  cookieStore.delete("email");
   redirect("/login");
 }
 
-export async function generate(prompt) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Not authenticated" };
-  }
-  if (!prompt || !prompt.trim()) {
-    return { error: "Prompt is required" };
-  }
-
-  const backendUrl = process.env.LLM_BACKEND_URL || "http://localhost:8000";
+export async function generate(symptoms) {
+  const token = await getToken();
+  if (!token) return { error: "Not authenticated" };
+  if (!symptoms?.trim()) return { error: "Please describe your symptoms" };
 
   try {
-    const res = await fetch(`${backendUrl}/generate`, {
+    const res = await fetch(`${API_URL}/api/symptoms/generate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ symptoms }),
     });
-    const data = await res.json();
+    return await res.json();
+  } catch {
+    return { error: "Could not reach the assistant" };
+  }
+}
 
-    await supabase.from("symptom_checks").insert({
-      symptoms: prompt,
-      response: data.response,
-      user_id: user.id,
+export async function getHistory() {
+  const token = await getToken();
+  if (!token) return { error: "Not authenticated" };
+
+  try {
+    const res = await fetch(`${API_URL}/api/symptoms/history`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
+    return await res.json();
+  } catch {
+    return { error: "Could not fetch history" };
+  }
+}
 
-    return { response: data.response };
-  } catch (err) {
-    return { error: "Could not reach the assistant." };
+export async function deleteEntry(id) {
+  const token = await getToken();
+  if (!token) return { error: "Not authenticated" };
+
+  try {
+    const res = await fetch(`${API_URL}/api/symptoms/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return await res.json();
+  } catch {
+    return { error: "Could not delete entry" };
+  }
+}
+
+export async function followUp(symptoms, initialResponse, messages, question) {
+  const token = await getToken();
+  if (!token) return { error: "Not authenticated" };
+
+  try {
+    const res = await fetch(`${API_URL}/api/symptoms/followup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ symptoms, initialResponse, messages, question }),
+    });
+    return await res.json();
+  } catch {
+    return { error: "Could not generate response" };
   }
 }
